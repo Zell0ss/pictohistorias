@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime / datos
+cache/
+fotos/
+capturas/
+logs/
+.env
+.pids/
+
+# Plantillas SQL rellenas con secretos reales (nunca commitear)
+db/*.local.sql
+
+# Docs de trabajo (planes, notas): locales, no se publican
+docs/
+
+# Claude Code local state
+.claude/

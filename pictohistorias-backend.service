@@ -1,0 +1,18 @@
+[Unit]
+Description=PictoHistorias — backend FastAPI (uvicorn)
+After=network.target mariadb.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/data/pictohistorias
+EnvironmentFile=/data/pictohistorias/.env
+ExecStart=/data/pictohistorias/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8002
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pictohistorias-backend
+
+[Install]
+WantedBy=multi-user.target

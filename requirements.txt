@@ -1,0 +1,20 @@
+httpx>=0.27.0
+pydantic-settings>=2.0.0
+pymysql>=1.1.0
+# pinned: >=1.10 removed .search() in favor of query_points() (see lib/qdrant_client.py); unpinned installs already drifted from the plan's original API once
+qdrant-client==1.19.1
+openai==3.14.1
+loguru>=0.7.0
+# opcional: cliente de LogCentral (si no está instalado se usa loguru)
+# -e /ruta/a/logcentral/packages/client
+pytest>=8.0.0
+# pinned: fastapi/anthropic broke compatibility before; starlette/anyio are transitive deps of fastapi but explicit pins prevent silent incompatibility on reinstall
+fastapi==0.141.1
+anthropic==1.6.0
+starlette==1.6.0
+anyio==4.15.1
+uvicorn[standard]>=0.30.0
+Pillow>=10.0.0
+python-multipart>=0.0.9
+PyJWT>=2.8.0
+cryptography>=42.0.0

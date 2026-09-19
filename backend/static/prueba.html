@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PictoHistorias — prueba</title>
+</head>
+<body>
+<h1>Prueba de generación</h1>
+<textarea id="prompt" rows="4" cols="60" placeholder="Cuéntame qué va a pasar..."></textarea><br>
+<button id="crear">Crear historia</button>
+<div id="resultado"></div>
+<script>
+document.getElementById('crear').addEventListener('click', async () => {
+  const prompt = document.getElementById('prompt').value;
+  const resultadoDiv = document.getElementById('resultado');
+  resultadoDiv.textContent = 'Generando...';
+  try {
+    const resp = await fetch('/api/historias', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prompt}),
+    });
+    if (!resp.ok) {
+      resultadoDiv.textContent = 'Error: ' + resp.status;
+      return;
+    }
+    const historia = await resp.json();
+    resultadoDiv.innerHTML = '<h2>' + historia.titulo + '</h2>';
+    for (const paso of historia.pasos) {
+      const div = document.createElement('div');
+      const img = paso.picto_id
+        ? '<img src="/pictos/' + paso.picto_id + '_300.png" width="150" alt="">'
+        : '(sin imagen)';
+      div.innerHTML = img + '<p>' + paso.frase + ' <small>(' + paso.concepto + ')</small></p>';
+      resultadoDiv.appendChild(div);
+    }
+  } catch (e) {
+    resultadoDiv.textContent = 'Error: ' + e;
+  }
+});
+</script>
+</body>
+</html>
