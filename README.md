@@ -48,6 +48,38 @@ Para saber más:
 | Pillow | Fotos | Redimensiona, corrige la orientación y elimina EXIF |
 | `cloudflared` | Opcional | Acceso remoto con Cloudflare Tunnel + Access |
 
+## Requisitos de hardware
+
+Está pensada para dejarla encendida todo el día en un equipo pequeño. La IA pesada (redactar la historia y calcular embeddings) la hacen Anthropic y OpenAI por API, así que el equipo solo orquesta: no hace falta GPU ni un procesador potente.
+
+**Consumo medido** en mi servidor de desarrollo (x86_64), con el catálogo completo de 13.827 pictogramas indexado:
+
+| Pieza | RAM | Disco |
+|---|---|---|
+| Qdrant | ~160 MB | ~125 MB |
+| Backend (uvicorn) | ~200 MB | — |
+| MariaDB | hasta ~260 MB (instancia compartida con otros proyectos: es una cota superior) | no medido |
+| nginx | ~20 MB | — |
+| Caché de pictogramas (`cache/pictos/`) | — | ~90 KB por pictograma usado (113 usados = 10 MB). Techo teórico si se usara el catálogo entero: ~1,2 GB |
+| Fotos propias (`fotos/`) | — | JPEG de 600 px; 236 KB en mi uso |
+
+En marcha, unos **0,6-0,7 GB de RAM** en total.
+
+| Equipo | ¿Sirve? |
+|---|---|
+| **Raspberry Pi 5 o 4, 4 GB o más, sistema de 64 bits** | Sí, recomendado. Qdrant publica binario `aarch64` e imagen Docker arm64 |
+| Raspberry Pi 4/5 de 2 GB | Justo. Aguanta en marcha, pero la ingesta inicial puede quedarse sin memoria (nota abajo) |
+| Raspberry Pi 3, Zero 2 W (1 GB o menos) | No recomendado |
+| Mini PC x86 (tipo N100), portátil viejo, NAS con Docker | Sí, y más cómodo |
+| Arduino, ESP32, Raspberry Pi Pico | **No.** Son microcontroladores con KB de RAM: no ejecutan Python, MariaDB ni Qdrant |
+
+Notas:
+- **Ingesta inicial.** Se hace una sola vez y mantiene en memoria los 13.800 vectores de 1536 dimensiones antes de subirlos. Por cálculo, el pico es del orden de 1 GB (estimación, no medida). Con 2 GB, añade swap.
+- **Disco.** Al menos 16 GB libres. Mejor un SSD por USB o una tarjeta SD de gama alta: MariaDB escribe a menudo y las tarjetas baratas se degradan.
+- **Copias de seguridad.** Lo insustituible son la base de datos (`mysqldump`) y `fotos/`. El catálogo y los pictogramas se regeneran (la ingesta cuesta céntimos).
+- **Python 3.11** es el que uso. Con otras versiones no lo he probado; en sistemas recientes la versión por defecto puede ser otra, comprueba `python3 --version`.
+- **No lo he probado en una Raspberry Pi.** Las cifras de arriba son del servidor x86; para ARM son estimaciones. Si lo montas, cuéntame qué tal.
+
 ## APIs y servicios externos
 
 | Servicio | Uso | Clave | Qué recibe |
@@ -62,7 +94,7 @@ El coste es bajo: indexar el catálogo completo (~13.800 pictogramas) son textos
 ### Privacidad
 
 - **Las fotos nunca salen del servidor.** Se guardan en local (JPEG de 600 px, sin EXIF, con nombre aleatorio) y no se envían a ningún LLM ni servicio externo.
-- La aplicación **no tiene usuarios ni contraseñas**. No la expongas tal cual a internet: pon delante Tailscale, una VPN o Cloudflare Access (ver más abajo).
+- La aplicación **no tiene usuarios ni contraseñas**. No la expongas tal cual a internet: pon delante Tailscale, una VPN o Cloudflare Access ([guía](guias/acceso-remoto.md)). En particular, **no uses `tailscale funnel`**, que la publicaría a todo internet.
 
 ## Puesta en marcha
 
@@ -97,7 +129,7 @@ make buscar q="coche"        # comprueba que la búsqueda devuelve algo razonabl
 make dev                     # app completa en http://127.0.0.1:8002/
 ```
 
-Para producción: `pictohistorias-backend.service` (systemd) y `nginx-pictohistorias.conf` (nginx). `make install-services` y `make deploy` los instalan (piden `sudo`). Ojo: el `.service` asume el proyecto en `/data/pictohistorias` y el usuario `ubuntu`, así que ajústalo a tu instalación. `make deploy` sustituye `TAILSCALE_IP` por la salida de `tailscale ip -4`; si no usas Tailscale, edita la línea `listen` de `nginx-pictohistorias.conf`. El nginx escucha solo en `127.0.0.1` y en esa IP.
+Para dejarla siempre encendida: `pictohistorias-backend.service` (systemd) y `nginx-pictohistorias.conf` (nginx). Ojo: el `.service` y el nginx asumen el proyecto en `/data/pictohistorias` y el usuario `ubuntu`, así que ajústalos a tu instalación. `make install-services` instala el servicio; `make deploy` instala el nginx, que está pensado para [Tailscale](guias/acceso-remoto.md) (sustituye `TAILSCALE_IP` por la salida de `tailscale ip -4`). Si no lo usas, edita la línea `listen` de `nginx-pictohistorias.conf`.
 
 ## Configuración
 
@@ -112,15 +144,11 @@ Todo va en `.env` (plantilla en [`.env.example`](.env.example)).
 | `ARASAAC_LOCALE`, `ARASAAC_API_BASE`, `ARASAAC_STATIC_BASE` | Catálogo ARASAAC |
 | `LOGCENTRAL_LOG_DIR` | Carpeta de logs (JSON, una línea por evento) |
 | `NOMBRE_NINO` | Opcional. Nombre del niño para la interfaz: con `NOMBRE_NINO=Leo` los textos dicen "Enseñar a Leo" y "Diccionario de Leo". Vacío, dicen "el niño". Solo afecta a la interfaz; el nombre no se envía al modelo |
-| `CLOUDFLARE_TUNNEL_TOKEN`, `CLOUDFLARE_TEAM`, `CLOUDFLARE_ACCESS_AUD`, `USUARIOS_MAPA` | Solo si usas Cloudflare (ver abajo) |
+| `CLOUDFLARE_TUNNEL_TOKEN`, `CLOUDFLARE_TEAM`, `CLOUDFLARE_ACCESS_AUD`, `USUARIOS_MAPA` | Solo si usas Cloudflare ([guía](guias/acceso-remoto.md#con-cloudflare-tunnel--access)) |
 
-### Acceso remoto con Cloudflare (opcional)
+## Verlo en el móvil
 
-1. Crea un túnel y una aplicación de Access en Cloudflare, con el túnel apuntando a `http://127.0.0.1:5252`.
-2. Rellena las cuatro variables `CLOUDFLARE_*` / `USUARIOS_MAPA`. `USUARIOS_MAPA` tiene la forma `email:etiqueta,email:etiqueta` y sirve para saber quién escribe cada historia (esa etiqueta pasa al prompt). `CLOUDFLARE_ACCESS_AUD` puedes dejarlo vacío al principio: el backend registra en el log el `aud` de los JWT válidos que reciba.
-3. `make install-cloudflared` (con `sudo`). El unit que crea `cloudflared` contiene el token, así que ejecuta después `sudo chmod 600 /etc/systemd/system/cloudflared.service`.
-
-El backend solo verifica el JWT de Access cuando la petición trae `Cf-Connecting-Ip`, es decir, cuando llega por el túnel. Ojo: esa verificación cubre `/api/`; las imágenes y el frontend los sirve nginx directamente, así que ahí la protección es la política de Access en Cloudflare.
+Esta guía deja la app funcionando en local. Para abrirla desde los móviles de la familia, desde casa o desde la calle, sin exponerla a internet, hay una guía aparte con **Tailscale** (lo más sencillo) y con **Cloudflare Tunnel + Access**: [`guias/acceso-remoto.md`](guias/acceso-remoto.md).
 
 ## Comandos
 
